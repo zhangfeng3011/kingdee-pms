@@ -1,46 +1,42 @@
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const store = require('../db');
-const { signToken, requireAuth } = require('../auth');
+const jwt = require('jsonwebtoken');
 
-const router = express.Router();
+const SECRET = process.env.JWT_SECRET || 'kingdee-pms-demo-secret-2026';
+const TOKEN_TTL = '7d';
 
-// 注册：姓名 + 密码（姓名至少2字，密码至少6位）
-router.post('/register', (req, res) => {
-  const { name, password } = req.body || {};
-  const uname = String(name || '').trim();
-  const upass = String(password || '');
-  if (uname.length < 2) return res.status(400).json({ error: '姓名至少2个字符' });
-  if (upass.length < 6) return res.status(400).json({ error: '密码至少6位' });
+function signToken(user) {
+  return jwt.sign(
+    { id: user.id, name: user.name, isAdmin: !!user.is_admin },
+    SECRET,
+    { expiresIn: TOKEN_TTL }
+  );
+}
 
-  if (store.findUserByName(uname)) return res.status(409).json({ error: '该姓名已注册，请直接登录' });
+function verifyToken(token) {
+  return jwt.verify(token, SECRET);
+}
 
-  const hash = bcrypt.hashSync(upass, 10);
-  const user = store.insertUser({ name: uname, password_hash: hash, is_admin: 0 });
-  // 新注册用户自动加入成员列表（同名成员已存在则跳过）
-  const memberExists = store.listMembers().some(m => m.name === uname);
-  if (!memberExists) store.insertMember({ name: uname, role: '' });
-  const token = signToken(user);
-  res.json({ token, user: { id: user.id, name: user.name, isAdmin: false } });
-});
-
-// 登录
-router.post('/login', (req, res) => {
-  const { name, password } = req.body || {};
-  const uname = String(name || '').trim();
-  const row = store.findUserByName(uname);
-  if (!row || !bcrypt.compareSync(String(password || ''), row.password_hash)) {
-    return res.status(401).json({ error: '姓名或密码错误' });
+// 认证中间件：从 Authorization: Bearer <token> 读取并校验登录态
+function requireAuth(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) {
+    return res.status(401).json({ error: '未登录' });
   }
-  const token = signToken(row);
-  res.json({ token, user: { id: row.id, name: row.name, isAdmin: !!row.is_admin } });
-});
+  try {
+    const payload = verifyToken(token);
+    req.user = payload;
+    next();
+  } catch (e) {
+    return res.status(401).json({ error: '登录已失效，请重新登录' });
+  }
+}
 
-// 当前登录用户信息
-router.get('/me', requireAuth, (req, res) => {
-  const row = store.findUserById(req.user.id);
-  if (!row) return res.status(404).json({ error: '用户不存在' });
-  res.json({ user: { id: row.id, name: row.name, isAdmin: !!row.is_admin } });
-});
+// 管理员中间件
+function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ error: '无权限，仅管理员可操作' });
+  }
+  next();
+}
 
-module.exports = router;
+module.exports = { signToken, verifyToken, requireAuth, requireAdmin };
