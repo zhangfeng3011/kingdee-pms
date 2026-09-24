@@ -1,0 +1,11 @@
+# Render 免费托管配置（可选，也可直接在 Render 控制台操作）
+services:
+  - type: web
+    name: kingdee-pms
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false

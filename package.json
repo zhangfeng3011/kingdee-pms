@@ -1,0 +1,16 @@
+{
+  "name": "kingdee-pms",
+  "version": "1.0.0",
+  "description": "金蝶项目管理系统 - 多人共享完整版",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cloudflared": "^0.7.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.23.0"
+  }
+}
